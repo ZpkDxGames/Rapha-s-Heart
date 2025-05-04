@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>:/</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      width: 100%;
+      height: 100vh;
+      background: linear-gradient(135deg, #530566bd 0%, #3616c2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+    
+    .popup-message {
+      position: relative;
+      z-index: 10;
+      background-color: white;
+      padding: 20px 40px;
+      border-radius: 50px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      animation: pulsate 2s infinite;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    
+    .popup-message:hover {
+      transform: scale(1.05);
+    }
+    
+    .popup-message.clicked {
+      opacity: 0;
+      transform: scale(0);
+      pointer-events: none;
+    }
+    
+    .popup-message p {
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      color: #FF4181;
+    }
+    
+    @keyframes pulsate {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      }
+      50% {
+        transform: scale(1.05);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="popup-message" id="popupMessage">
+    <p>Clique em mim</p>
+  </div>
+  
+  <canvas id="animationCanvas"></canvas>
+
+  <!-- Heart SVG Images (Base64 encoded) -->
+  <img id="redHeart" style="display:none;" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHBhdGggZD0iTTUwIDkwIEMyNSA2NSwgMCA0NSwgMCAyMCBDMCAwLCAyMCAwLCAzMCAxMCBDNDAgMjAsIDUwIDMwLCA1MCAzMCBDNTAgMzAsIDYwIDIwLCA3MCAxMCBDODAgMCwgMTAwIDAsIDEwMCAyMCBDMTAwIDQ1LCA3NSA2NSwgNTAgOTAgWiIgCiAgICAgICAgZmlsbD0iI0ZGMzM2NiIgc3Ryb2tlPSIjRkYwMDMzIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+" alt="Red Heart">
+  <img id="pinkHeart" style="display:none;" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHBhdGggZD0iTTUwIDkwIEMyNSA2NSwgMCA0NSwgMCAyMCBDMCAwLCAyMCAwLCAzMCAxMCBDNDAgMjAsIDUwIDMwLCA1MCAzMCBDNTAgMzAsIDYwIDIwLCA3MCAxMCBDODAgMCwgMTAwIDAsIDEwMCAyMCBDMTAwIDQ1LCA3NSA2NSwgNTAgOTAgWiIgCiAgICAgICAgZmlsbD0iI0ZGNkI2QiIgc3Ryb2tlPSIjRkY0MTM2IiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+" alt="Pink Heart">
+
+  <script>
+    // Animation stages
+    const STAGE = {
+      WAITING: 'waiting',
+      PARTICLES: 'particles',
+      FORMING: 'forming',
+      FIREWORKS: 'fireworks'
+    };
+
+    // Heart Particle Animation
+    class ParticleAnimation {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.stage = STAGE.WAITING;
+        this.particles = [];
+        this.fireworks = [];
+        this.rainingHearts = [];
+        this.heartPoints = [];
+        this.lastFireworkTime = 0;
+        this.lastHeartTime = 0;
+        this.messageOpacity = 0;
+        this.messageY = 0;
+        this.messageAnimStartTime = 0;
+        
+        // Heart images
+        this.heartImage = document.getElementById('redHeart');
+        this.heartPinkImage = document.getElementById('pinkHeart');
+        
+        // Constants
+        this.COLORS = ['#FF6B6B', '#FFE66D', '#4ECDC4', '#6C5CE7', '#FC5C65', '#FF9FF3', '#55E6C1', '#FFF200', '#F97F51'];
+        this.HEART_COLORS = ['#FF6B6B', '#FF4136', '#FF3366', '#FF0066', '#FF0033'];
+        this.MESSAGE = "Te amo, Rapha";
+        
+        // Stage transition flags
+        this.stageTransitions = {
+          particlesToForming: false,
+          formingToFireworks: false
+        };
+        
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+      }
+      
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        
+        if (this.stage === STAGE.FORMING || this.stage === STAGE.FIREWORKS) {
+          this.assignParticlesToHeart();
+        }
+      }
+      
+      start() {
+        this.stage = STAGE.PARTICLES;
+        this.initParticles();
+        console.log("Starting particles animation");
+      }
+      
+      setStage(stage) {
+        console.log("Animation stage changed to:", stage);
+        this.stage = stage;
+        
+        if (stage === STAGE.WAITING) {
+          this.stageTransitions = {
+            particlesToForming: false,
+            formingToFireworks: false
+          };
+        }
+        
+        if (stage === STAGE.FORMING) {
+          this.assignParticlesToHeart();
+          this.stageTransitions.formingToFireworks = false;
+        }
+        
+        if (stage === STAGE.FIREWORKS) {
+          this.lastFireworkTime = Date.now();
+          this.lastHeartTime = Date.now();
+        }
+      }
+      
+      initParticles() {
+        this.particles = [];
+        for (let i = 0; i < 300; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 2 + Math.random() * 3;
+          const velocityX = -1 + Math.random() * 2;
+          const velocityY = -1 + Math.random() * 2;
+          const color = this.HEART_COLORS[Math.floor(Math.random() * this.HEART_COLORS.length)];
+          
+          this.particles.push({
+            x,
+            y,
+            originalX: x,
+            originalY: y,
+            targetX: x,
+            targetY: y,
+            color,
+            size,
+            originalSize: size,
+            velocityX,
+            velocityY,
+            life: 1,
+            gravity: 0,
+            alpha: 1,
+            stage: 'initial'
+          });
+        }
+        console.log(`Initialized ${this.particles.length} particles`);
+      }
+      
+      createHeart(x, y, size) {
+        const points = [];
+        const numPoints = 200;
+        
+        // Core points that form the heart outline
+        for (let i = 0; i < numPoints; i++) {
+          const angle = (i / numPoints) * Math.PI * 2;
+          // Heart shape formula
+          const heartX = size * 16 * Math.pow(Math.sin(angle), 3);
+          const heartY = size * (13 * Math.cos(angle) - 5 * Math.cos(2 * angle) - 2 * Math.cos(3 * angle) - Math.cos(4 * angle));
+          
+          points.push({
+            x: x + heartX,
+            y: y - heartY
+          });
+        }
+        
+        // Add extra points inside the heart
+        const extraPoints = 100;
+        for (let i = 0; i < extraPoints; i++) {
+          const angle = (i / extraPoints) * Math.PI * 2;
+          const heartX = size * 16 * Math.pow(Math.sin(angle), 3);
+          const heartY = size * (13 * Math.cos(angle) - 5 * Math.cos(2 * angle) - 2 * Math.cos(3 * angle) - Math.cos(4 * angle));
+          
+          // Random scale to fill the heart (50-90% of the size)
+          const scale = 0.5 + Math.random() * 0.4;
+          points.push({
+            x: x + (heartX * scale),
+            y: y - (heartY * scale)
+          });
+        }
+        
+        console.log(`Created ${points.length} heart points`);
+        return points;
+      }
+      
+      assignParticlesToHeart() {
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        const heartSize = Math.min(this.canvas.width, this.canvas.height) * 0.15;
+        
+        this.heartPoints = this.createHeart(centerX, centerY, heartSize);
+        
+        // Assign each particle to a point in the heart
+        this.particles.forEach((particle, index) => {
+          const targetPoint = this.heartPoints[index % this.heartPoints.length];
+          particle.targetX = targetPoint.x;
+          particle.targetY = targetPoint.y;
+          particle.stage = 'forming';
+        });
+      }
+      
+      createFirework(x, y) {
+        const particles = [];
+        const particleCount = 60; // Reduced particle count to prevent lag
+        
+        for (let i = 0; i < particleCount; i++) {
+          const angle = (i / particleCount) * Math.PI * 2;
+          const speed = 1 + Math.random() * 4;
+          const color = this.COLORS[Math.floor(Math.random() * this.COLORS.length)];
+          const size = 1 + Math.random() * 3;
+          const offsetX = -5 + Math.random() * 10;
+          const offsetY = -5 + Math.random() * 10;
+          
+          // No hearts in fireworks as requested
+          const particleStage = 'firework';
+          
+          particles.push({
+            x: x + offsetX,
+            y: y + offsetY,
+            originalX: x,
+            originalY: y,
+            targetX: x,
+            targetY: y,
+            color: color,
+            size: size,
+            originalSize: size,
+            velocityX: Math.cos(angle) * speed,
+            velocityY: Math.sin(angle) * speed,
+            life: 0.7 + Math.random() * 0.3,
+            gravity: 0.03 + Math.random() * 0.04,
+            alpha: 1,
+            stage: particleStage
+          });
+        }
+        
+        return particles;
+      }
+      
+      createRainingHeart(width) {
+        return {
+          x: Math.random() * width,
+          y: -50,
+          size: 20 + Math.random() * 30,
+          speed: 1 + Math.random() * 2,
+          color: Math.random() > 0.5 ? 'red' : 'pink',
+          rotation: Math.random() * 0.3 - 0.15,
+          rotationSpeed: -0.01 + Math.random() * 0.02,
+          opacity: 0.7 + Math.random() * 0.3
+        };
+      }
+      
+      updateRainingHearts() {
+        // Add new hearts occasionally
+        const currentTime = Date.now();
+        if (currentTime - this.lastHeartTime > 300) {
+          this.rainingHearts.push(this.createRainingHeart(this.canvas.width));
+          this.lastHeartTime = currentTime;
+        }
+        
+        // Cap the maximum number of hearts
+        if (this.rainingHearts.length > 50) {
+          this.rainingHearts = this.rainingHearts.slice(-50);
+        }
+        
+        // Update existing hearts
+        this.rainingHearts = this.rainingHearts.filter(heart => {
+          heart.y += heart.speed;
+          heart.rotation += heart.rotationSpeed;
+          return heart.y < this.canvas.height + 50;
+        });
+      }
+      
+      drawRainingHearts() {
+        this.rainingHearts.forEach(heart => {
+          this.ctx.save();
+          this.ctx.translate(heart.x, heart.y);
+          this.ctx.rotate(heart.rotation);
+          this.ctx.globalAlpha = heart.opacity;
+          
+          const heartImg = heart.color === 'red' ? this.heartImage : this.heartPinkImage;
+          const halfSize = heart.size / 2;
+          this.ctx.drawImage(heartImg, -halfSize, -halfSize, heart.size, heart.size);
+          
+          this.ctx.restore();
+        });
+      }
+      
+      updateFireworks() {
+        // Add new fireworks periodically
+        const currentTime = Date.now();
+        if (currentTime - this.lastFireworkTime > 500) {
+          const angle = Math.random() * Math.PI * 2;
+          const width = this.canvas.width;
+          const height = this.canvas.height;
+          const centerX = width / 2;
+          const centerY = height / 2;
+          const distance = Math.min(width, height) * 0.3 * Math.random();
+          const fireworkX = centerX + Math.cos(angle) * distance;
+          const fireworkY = centerY + Math.sin(angle) * distance;
+          
+          // Limit total number of particles
+          const totalFireworkParticles = this.fireworks.length;
+          if (totalFireworkParticles < 300) {
+            this.fireworks = [...this.fireworks, ...this.createFirework(fireworkX, fireworkY)];
+          } else {
+            const newFireworkParticles = this.createFirework(fireworkX, fireworkY);
+            this.fireworks = [...this.fireworks.slice(newFireworkParticles.length), ...newFireworkParticles];
+          }
+          
+          this.lastFireworkTime = currentTime;
+        }
+        
+        // Update and filter existing fireworks
+        this.fireworks = this.fireworks.filter(particle => {
+          this.updateParticle(particle);
+          return particle.life > 0;
+        });
+      }
+      
+      updateParticle(particle) {
+        if (particle.stage === 'initial') {
+          // Random movement before forming heart
+          particle.x += particle.velocityX;
+          particle.y += particle.velocityY;
+          
+          // Bounce off edges
+          if (particle.x <= 0 || particle.x >= this.canvas.width) {
+            particle.velocityX *= -1;
+          }
+          if (particle.y <= 0 || particle.y >= this.canvas.height) {
+            particle.velocityY *= -1;
+          }
+        } else if (particle.stage === 'forming') {
+          // Move towards target position (heart shape)
+          const dx = particle.targetX - particle.x;
+          const dy = particle.targetY - particle.y;
+          particle.x += dx * 0.05;
+          particle.y += dy * 0.05;
+          
+          // Check if particle has reached its target position
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance < 0.5) {
+            particle.stage = 'formed';
+            particle.x = particle.targetX;
+            particle.y = particle.targetY;
+          }
+        } else if (particle.stage === 'firework') {
+          // Firework particle behavior
+          particle.x += particle.velocityX;
+          particle.y += particle.velocityY;
+          particle.velocityY += particle.gravity;
+          particle.life -= 0.02;
+          particle.life = Math.max(0, particle.life);
+          particle.alpha = particle.life;
+          particle.size = particle.originalSize * particle.life;
+        }
+      }
+      
+      drawParticle(particle) {
+        // Ensure we never use a negative or zero radius
+        const safeSize = Math.max(0.1, particle.size);
+        this.ctx.globalAlpha = particle.alpha;
+        this.ctx.fillStyle = particle.color;
+        
+        // All particles are regular circular particles now
+        this.ctx.beginPath();
+        this.ctx.arc(particle.x, particle.y, safeSize, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.globalAlpha = 1;
+      }
+      
+      drawMessage() {
+        // Initialize message animation if not started yet
+        if (this.messageAnimStartTime === 0) {
+          this.messageAnimStartTime = Date.now();
+          this.messageY = this.canvas.height * 0.65;
+        }
+        
+        const elapsedTime = Date.now() - this.messageAnimStartTime;
+        
+        // Fade in over 2 seconds
+        if (elapsedTime < 2000) {
+          this.messageOpacity = elapsedTime / 2000;
+        } else {
+          this.messageOpacity = 1.0;
+        }
+        
+        // Move up over 1.5 seconds
+        if (elapsedTime < 1500) {
+          const progress = elapsedTime / 1500;
+          this.messageY = this.canvas.height * 0.65 - (this.canvas.height * 0.15 * progress);
+        }
+        
+        // Set font properties
+        this.ctx.save();
+        this.ctx.font = "bold 32px 'Comic Sans MS', cursive";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        
+        // Add shadow for better visibility
+        this.ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+        this.ctx.shadowBlur = 10;
+        this.ctx.shadowOffsetX = 2;
+        this.ctx.shadowOffsetY = 2;
+        
+        // Create gradient for text
+        const gradient = this.ctx.createLinearGradient(
+          this.canvas.width / 2 - 100, this.messageY,
+          this.canvas.width / 2 + 100, this.messageY
+        );
+        gradient.addColorStop(0, "#FF6B6B");
+        gradient.addColorStop(0.5, "#FF0066");
+        gradient.addColorStop(1, "#FF9FF3");
+        
+        this.ctx.fillStyle = gradient;
+        this.ctx.globalAlpha = this.messageOpacity;
+        
+        // Draw text
+        this.ctx.fillText(this.MESSAGE, this.canvas.width / 2, this.messageY);
+        
+        // Reset
+        this.ctx.restore();
+      }
+      
+      animate() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        if (this.stage === STAGE.PARTICLES) {
+          // Random particle movement
+          this.particles.forEach(particle => {
+            this.updateParticle(particle);
+            this.drawParticle(particle);
+          });
+          
+          // Move to forming stage after a delay
+          if (!this.stageTransitions.particlesToForming) {
+            this.stageTransitions.particlesToForming = true;
+            setTimeout(() => {
+              console.log("Moving to forming stage");
+              this.setStage(STAGE.FORMING);
+            }, 2000);
+          }
+        } else if (this.stage === STAGE.FORMING) {
+          // Show particles moving towards heart shape
+          this.particles.forEach(particle => {
+            this.updateParticle(particle);
+            this.drawParticle(particle);
+          });
+          
+          // Check if all particles have formed the heart
+          const formedCount = this.particles.filter(p => p.stage === 'formed').length;
+          const totalParticles = this.particles.length;
+          
+          // When most particles have formed the heart shape, move to fireworks stage
+          if (formedCount > totalParticles * 0.95 && !this.stageTransitions.formingToFireworks) {
+            this.stageTransitions.formingToFireworks = true;
+            console.log("Moving to fireworks stage");
+            this.setStage(STAGE.FIREWORKS);
+          }
+        } else if (this.stage === STAGE.FIREWORKS) {
+          // Update and draw raining hearts
+          this.updateRainingHearts();
+          this.drawRainingHearts();
+          
+          // Update and draw fireworks
+          this.updateFireworks();
+          this.fireworks.forEach(particle => {
+            this.drawParticle(particle);
+          });
+          
+          // Draw message
+          this.drawMessage();
+        }
+        
+        requestAnimationFrame(this.animate);
+      }
+    }
+
+    // Initialize the animation when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      const animation = new ParticleAnimation('animationCanvas');
+      const popupMessage = document.getElementById('popupMessage');
+      
+      popupMessage.addEventListener('click', () => {
+        console.log("Popup clicked");
+        popupMessage.classList.add('clicked');
+        animation.start();
+      });
+    });
+  </script>
+</body>
+</html>
